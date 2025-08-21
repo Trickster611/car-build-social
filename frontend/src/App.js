@@ -598,6 +598,172 @@ const CreateEventModal = ({ onEventCreated }) => {
     </Dialog>
   );
 };
+
+const EventCard = ({ event, onJoin, onLeave }) => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  const handleJoinLeave = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      if (event.user_joined) {
+        await axios.delete(`${API}/events/${event.id}/join`);
+        onLeave(event.id);
+      } else {
+        await axios.post(`${API}/events/${event.id}/join`);
+        onJoin(event.id);
+      }
+    } catch (error) {
+      console.error('Failed to join/leave event:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getEventTypeLabel = (type) => {
+    const types = {
+      'car_meet': 'Car Meet',
+      'car_show': 'Car Show',
+      'race': 'Race Event',
+      'workshop': 'Workshop',
+      'cruise': 'Cruise',
+      'track_day': 'Track Day'
+    };
+    return types[type] || type;
+  };
+
+  const getEventTypeColor = (type) => {
+    const colors = {
+      'car_meet': 'bg-blue-100 text-blue-800',
+      'car_show': 'bg-purple-100 text-purple-800',
+      'race': 'bg-red-100 text-red-800',
+      'workshop': 'bg-green-100 text-green-800',
+      'cruise': 'bg-orange-100 text-orange-800',
+      'track_day': 'bg-yellow-100 text-yellow-800'
+    };
+    return colors[type] || 'bg-gray-100 text-gray-800';
+  };
+
+  const eventDate = new Date(`${event.event_date}T${event.event_time}`);
+  const isEventFull = event.max_participants && event.participants_count >= event.max_participants;
+
+  return (
+    <Card className="w-full shadow-md hover:shadow-lg transition-shadow border-amber-100">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={event.user?.profile_image} />
+              <AvatarFallback className="bg-amber-100 text-amber-700">
+                {event.user?.username?.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="font-semibold text-gray-900">@{event.user?.username}</h3>
+              <p className="text-sm text-gray-500">Event Organizer</p>
+            </div>
+          </div>
+          <Badge className={getEventTypeColor(event.event_type)}>
+            {getEventTypeLabel(event.event_type)}
+          </Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">{event.title}</h2>
+          <p className="text-gray-700 mb-4">{event.description}</p>
+          
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Calendar className="h-4 w-4 text-amber-600" />
+              <span>{eventDate.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}</span>
+            </div>
+            
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Clock className="h-4 w-4 text-amber-600" />
+              <span>{eventDate.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}</span>
+            </div>
+            
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <MapPin className="h-4 w-4 text-amber-600" />
+              <span>{event.location}</span>
+            </div>
+            
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Users className="h-4 w-4 text-amber-600" />
+              <span>
+                {event.participants_count} participants
+                {event.max_participants && ` (${event.max_participants} max)`}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {event.images && event.images.length > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            {event.images.slice(0, 4).map((image, index) => (
+              <img
+                key={index}
+                src={image}
+                alt={`${event.title} ${index + 1}`}
+                className="w-full h-32 object-cover rounded-lg border border-gray-200"
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <CardFooter className="flex justify-between items-center pt-4 border-t border-gray-100">
+        <div className="text-sm text-gray-500">
+          {event.participants_count} going
+        </div>
+        
+        {user && user.id !== event.user_id && (
+          <Button
+            onClick={handleJoinLeave}
+            disabled={loading || (!event.user_joined && isEventFull)}
+            className={event.user_joined 
+              ? "bg-red-600 hover:bg-red-700" 
+              : "bg-green-600 hover:bg-green-700"
+            }
+            size="sm"
+          >
+            {loading ? '...' : (
+              <>
+                {event.user_joined ? (
+                  <>
+                    <UserMinus className="h-4 w-4 mr-1" />
+                    Leave Event
+                  </>
+                ) : isEventFull ? (
+                  'Event Full'
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4 mr-1" />
+                    Join Event
+                  </>
+                )}
+              </>
+            )}
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
+  );
+};
+
+const CreateProjectModal = ({ onProjectCreated }) => {
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
