@@ -1052,7 +1052,381 @@ const HomePage = () => {
   );
 };
 
-const EventsPage = () => {
+const UserDiscoveryCard = ({ user, onFollow }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleFollow = async () => {
+    setLoading(true);
+    try {
+      await axios.post(`${API}/users/${user.id}/follow`);
+      onFollow(user.id);
+    } catch (error) {
+      console.error('Failed to follow user:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="w-full shadow-md hover:shadow-lg transition-shadow border-amber-100">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={user.profile_image} />
+              <AvatarFallback className="bg-amber-100 text-amber-700">
+                {user.username?.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="font-semibold text-gray-900">@{user.username}</h3>
+              <p className="text-sm text-gray-600">{user.bio || 'Car enthusiast'}</p>
+              <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
+                <span>{user.stats?.project_count || 0} projects</span>
+                <span>{user.stats?.event_count || 0} events</span>
+                <span>{user.stats?.follower_count || 0} followers</span>
+              </div>
+            </div>
+          </div>
+          <Button
+            onClick={handleFollow}
+            disabled={loading}
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700"
+          >
+            {loading ? '...' : (
+              <>
+                <UserPlus className="h-4 w-4 mr-1" />
+                Follow
+              </>
+            )}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const DiscoverPage = () => {
+  const [activeTab, setActiveTab] = useState('users');
+  const [users, setUsers] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchDiscoveryData();
+  }, [activeTab]);
+
+  const fetchDiscoveryData = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'users') {
+        const response = await axios.get(`${API}/discover/users`);
+        setUsers(response.data);
+      } else if (activeTab === 'events') {
+        const response = await axios.get(`${API}/discover/events`);
+        setEvents(response.data);
+      } else if (activeTab === 'projects') {
+        const response = await axios.get(`${API}/discover/projects`);
+        setProjects(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch discovery data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API}/search?q=${encodeURIComponent(searchQuery)}`);
+      setSearchResults(response.data);
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFollowUser = (userId) => {
+    // Update local state to reflect the follow
+    setUsers(users.filter(u => u.id !== userId));
+    if (searchResults) {
+      setSearchResults({
+        ...searchResults,
+        users: searchResults.users.filter(u => u.id !== userId)
+      });
+    }
+  };
+
+  const handleJoinEvent = (eventId) => {
+    const updateEvents = (eventsList) => eventsList.map(event => 
+      event.id === eventId 
+        ? { 
+            ...event, 
+            participants_count: (event.participants_count || 0) + 1,
+            user_joined: true
+          }
+        : event
+    );
+
+    setEvents(updateEvents(events));
+    if (searchResults) {
+      setSearchResults({
+        ...searchResults,
+        events: updateEvents(searchResults.events)
+      });
+    }
+  };
+
+  const handleLeaveEvent = (eventId) => {
+    const updateEvents = (eventsList) => eventsList.map(event => 
+      event.id === eventId 
+        ? { 
+            ...event, 
+            participants_count: Math.max((event.participants_count || 1) - 1, 0),
+            user_joined: false
+          }
+        : event
+    );
+
+    setEvents(updateEvents(events));
+    if (searchResults) {
+      setSearchResults({
+        ...searchResults,
+        events: updateEvents(searchResults.events)
+      });
+    }
+  };
+
+  const handleLikeProject = async (projectId) => {
+    try {
+      const response = await axios.post(`${API}/likes`, { project_id: projectId });
+      const updateProjects = (projectsList) => projectsList.map(project => 
+        project.id === projectId 
+          ? { ...project, likes_count: response.data.liked ? (project.likes_count || 0) + 1 : (project.likes_count || 1) - 1 }
+          : project
+      );
+
+      setProjects(updateProjects(projects));
+      if (searchResults) {
+        setSearchResults({
+          ...searchResults,
+          projects: updateProjects(searchResults.projects)
+        });
+      }
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-6 text-center">
+        <Compass className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Login to Discover</h2>
+        <p className="text-gray-600">Join AutoSocial Hub to discover amazing car enthusiasts and events!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Discover</h1>
+        <p className="text-gray-600">Find new car enthusiasts, events, and projects in the community</p>
+      </div>
+
+      {/* Search Bar */}
+      <form onSubmit={handleSearch} className="mb-6">
+        <div className="flex space-x-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search users, events, or projects..."
+              className="pl-10"
+            />
+          </div>
+          <Button type="submit" disabled={loading} className="bg-amber-600 hover:bg-amber-700">
+            Search
+          </Button>
+        </div>
+      </form>
+
+      {/* Search Results */}
+      {searchResults && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Search Results for "{searchResults.query}"
+          </h2>
+          
+          <Tabs defaultValue="users" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="users">Users ({searchResults.users.length})</TabsTrigger>
+              <TabsTrigger value="events">Events ({searchResults.events.length})</TabsTrigger>
+              <TabsTrigger value="projects">Projects ({searchResults.projects.length})</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="users" className="space-y-4 mt-4">
+              {searchResults.users.map((user) => (
+                <UserDiscoveryCard key={user.id} user={user} onFollow={handleFollowUser} />
+              ))}
+              {searchResults.users.length === 0 && (
+                <p className="text-center text-gray-500 py-8">No users found</p>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="events" className="space-y-4 mt-4">
+              {searchResults.events.map((event) => (
+                <EventCard key={event.id} event={event} onJoin={handleJoinEvent} onLeave={handleLeaveEvent} />
+              ))}
+              {searchResults.events.length === 0 && (
+                <p className="text-center text-gray-500 py-8">No events found</p>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="projects" className="space-y-4 mt-4">
+              {searchResults.projects.map((project) => (
+                <ProjectCard key={project.id} project={project} onLike={handleLikeProject} />
+              ))}
+              {searchResults.projects.length === 0 && (
+                <p className="text-center text-gray-500 py-8">No projects found</p>
+              )}
+            </TabsContent>
+          </Tabs>
+          
+          <Button
+            variant="ghost"
+            onClick={() => setSearchResults(null)}
+            className="mt-4"
+          >
+            Clear Search Results
+          </Button>
+        </div>
+      )}
+
+      {/* Discovery Tabs */}
+      {!searchResults && (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="users" className="flex items-center space-x-2">
+              <Users className="h-4 w-4" />
+              <span>Users</span>
+            </TabsTrigger>
+            <TabsTrigger value="events" className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4" />
+              <span>Events</span>
+            </TabsTrigger>
+            <TabsTrigger value="projects" className="flex items-center space-x-2">
+              <Car className="h-4 w-4" />
+              <span>Projects</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="space-y-4 mt-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <TrendingUp className="h-5 w-5 text-amber-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Recommended Users</h2>
+            </div>
+            
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="text-center">
+                  <Users className="h-8 w-8 animate-pulse text-amber-600 mx-auto mb-2" />
+                  <p className="text-gray-500">Finding awesome car enthusiasts...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {users.map((user) => (
+                  <UserDiscoveryCard key={user.id} user={user} onFollow={handleFollowUser} />
+                ))}
+                {users.length === 0 && (
+                  <div className="text-center py-12">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No new users to discover</h3>
+                    <p className="text-gray-500">You're already following all the active users!</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="events" className="space-y-4 mt-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <TrendingUp className="h-5 w-5 text-amber-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Trending Events</h2>
+            </div>
+            
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="text-center">
+                  <Calendar className="h-8 w-8 animate-pulse text-amber-600 mx-auto mb-2" />
+                  <p className="text-gray-500">Finding exciting events...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {events.map((event) => (
+                  <EventCard key={event.id} event={event} onJoin={handleJoinEvent} onLeave={handleLeaveEvent} />
+                ))}
+                {events.length === 0 && (
+                  <div className="text-center py-12">
+                    <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No events to discover</h3>
+                    <p className="text-gray-500">Check back later for new events!</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="projects" className="space-y-4 mt-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <TrendingUp className="h-5 w-5 text-amber-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Popular Projects</h2>
+            </div>
+            
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="text-center">
+                  <Car className="h-8 w-8 animate-pulse text-amber-600 mx-auto mb-2" />
+                  <p className="text-gray-500">Finding amazing projects...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {projects.map((project) => (
+                  <ProjectCard key={project.id} project={project} onLike={handleLikeProject} />
+                ))}
+                {projects.length === 0 && (
+                  <div className="text-center py-12">
+                    <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No projects to discover</h3>
+                    <p className="text-gray-500">Popular projects will appear here!</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  );
+};
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
