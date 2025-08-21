@@ -1181,6 +1181,7 @@ const AuthContent = () => {
       <main>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/events" element={<EventsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
