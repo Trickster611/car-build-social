@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./components/ui/avatar";
 import { Separator } from "./components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
-import { Heart, MessageCircle, Plus, User, Settings, Car, Users, Calendar, DollarSign } from "lucide-react";
+import { Heart, MessageCircle, Plus, User, Settings, Car, Users, Calendar, DollarSign, MapPin, Clock, UserPlus, UserMinus } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
