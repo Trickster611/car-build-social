@@ -1022,6 +1022,108 @@ const HomePage = () => {
   );
 };
 
+const EventsPage = () => {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  const fetchEvents = async () => {
+    try {
+      const response = await axios.get(`${API}/events`);
+      setEvents(response.data);
+    } catch (error) {
+      console.error('Failed to fetch events:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEventCreated = (newEvent) => {
+    // Add user data to the new event
+    newEvent.user = { 
+      id: user.id, 
+      username: user.username, 
+      profile_image: user.profile_image 
+    };
+    newEvent.participants_count = 0;
+    newEvent.user_joined = false;
+    setEvents([newEvent, ...events]);
+  };
+
+  const handleJoinEvent = (eventId) => {
+    setEvents(events.map(event => 
+      event.id === eventId 
+        ? { 
+            ...event, 
+            participants_count: (event.participants_count || 0) + 1,
+            user_joined: true
+          }
+        : event
+    ));
+  };
+
+  const handleLeaveEvent = (eventId) => {
+    setEvents(events.map(event => 
+      event.id === eventId 
+        ? { 
+            ...event, 
+            participants_count: Math.max((event.participants_count || 1) - 1, 0),
+            user_joined: false
+          }
+        : event
+    ));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-64">
+        <div className="text-center">
+          <Calendar className="h-8 w-8 animate-pulse text-amber-600 mx-auto mb-2" />
+          <p className="text-gray-500">Loading upcoming events...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Car Events</h1>
+          <p className="text-gray-600">Join amazing automotive events in your community</p>
+        </div>
+        {user && <CreateEventModal onEventCreated={handleEventCreated} />}
+      </div>
+
+      <div className="space-y-6">
+        {events.length === 0 ? (
+          <Card className="text-center py-12">
+            <CardContent>
+              <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming events</h3>
+              <p className="text-gray-500 mb-4">Be the first to organize a car event for the community!</p>
+              {user && <CreateEventModal onEventCreated={handleEventCreated} />}
+            </CardContent>
+          </Card>
+        ) : (
+          events.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              onJoin={handleJoinEvent}
+              onLeave={handleLeaveEvent}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
 function App() {
   return (
     <AuthProvider>
