@@ -571,6 +571,243 @@ async def get_user_events(user_id: str):
     events = await db.events.find({"user_id": user_id}).sort("event_date", 1).to_list(length=100)
     return [Event(**event) for event in events]
 
+# Discovery routes
+@api_router.get("/discover/users", response_model=List[Dict[str, Any]])
+async def discover_users(current_user: User = Depends(get_current_user), limit: int = 20):
+    """Discover new users to follow"""
+    if current_user:
+        # Exclude already followed users and self
+        excluded_users = current_user.followed_users + [current_user.id]
+        users_cursor = db.users.find({"id": {"$nin": excluded_users}})
+    else:
+        users_cursor = db.users.find()
+    
+    users_list = await users_cursor.to_list(length=limit)
+    
+    # Enrich with stats
+    discovered_users = []
+    for user_data in users_list:
+        user = parse_from_mongo(user_data)
+        
+        # Get user stats
+        project_count = await db.projects.count_documents({"user_id": user["id"]})
+        event_count = await db.events.count_documents({"user_id": user["id"]})
+        follower_count = len(user.get("followers", []))
+        
+        user["stats"] = {
+            "project_count": project_count,
+            "event_count": event_count,
+            "follower_count": follower_count
+        }
+        
+        discovered_users.append(user)
+    
+    # Sort by activity (projects + events + followers)
+    discovered_users.sort(key=lambda u: u["stats"]["project_count"] + u["stats"]["event_count"] + u["stats"]["follower_count"], reverse=True)
+    
+    return discovered_users[:limit]
+
+@api_router.get("/discover/events", response_model=List[Dict[str, Any]])
+async def discover_events(current_user: User = Depends(get_current_user), limit: int = 20):
+    """Discover trending/popular events"""
+    from datetime import date
+    today = date.today().isoformat()
+    
+    # Get upcoming events
+    events_cursor = db.events.find({"event_date": {"$gte": today}}).sort("event_date", 1)
+    events_list = await events_cursor.to_list(length=limit * 2)  # Get more to filter
+    
+    # Enrich with user data and sort by popularity
+    discovered_events = []
+    for event in events_list:
+        user = await db.users.find_one({"id": event["user_id"]})
+        if user:
+            event["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
+        
+        # Add participant info
+        event["participants_count"] = len(event.get("participants", []))
+        if current_user:
+            event["user_joined"] = current_user.id in event.get("participants", [])
+        else:
+            event["user_joined"] = False
+            
+        # Calculate popularity score (participants + recency)
+        from datetime import datetime
+        try:
+            event_date = datetime.fromisoformat(event["event_date"])
+            days_until_event = (event_date.date() - date.today()).days
+            recency_score = max(0, 30 - days_until_event) if days_until_event >= 0 else 0
+        except:
+            recency_score = 0
+            
+        event["popularity_score"] = event["participants_count"] * 2 + recency_score
+        
+        cleaned_event = parse_from_mongo(event)
+        discovered_events.append(cleaned_event)
+    
+    # Sort by popularity score
+    discovered_events.sort(key=lambda e: e.get("popularity_score", 0), reverse=True)
+    
+    return discovered_events[:limit]
+
+@api_router.get("/discover/projects", response_model=List[Dict[str, Any]])
+async def discover_projects(current_user: User = Depends(get_current_user), limit: int = 20):
+    """Discover trending/popular projects"""
+    # Get projects sorted by likes and comments
+    projects_cursor = db.projects.find().sort([("likes_count", -1), ("comments_count", -1), ("created_at", -1)])
+    projects_list = await projects_cursor.to_list(length=limit)
+    
+    # Enrich with user data
+    discovered_projects = []
+    for project in projects_list:
+        user = await db.users.find_one({"id": project["user_id"]})
+        if user:
+            project["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
+        
+        cleaned_project = parse_from_mongo(project)
+        discovered_projects.append(cleaned_project)
+    
+    return discovered_projects
+
+@api_router.get("/search", response_model=Dict[str, Any])
+async def universal_search(q: str, current_user: User = Depends(get_current_user), limit: int = 10):
+    """Universal search across users, events, and projects"""
+    if not q or len(q.strip()) < 2:
+        return {"users": [], "events": [], "projects": []}
+    
+    search_term = q.strip()
+    
+    # Search users
+    users_cursor = db.users.find({
+        "$or": [
+            {"username": {"$regex": search_term, "$options": "i"}},
+            {"bio": {"$regex": search_term, "$options": "i"}}
+        ]
+    })
+    users_list = await users_cursor.to_list(length=limit)
+    users_results = []
+    for user_data in users_list:
+        user = parse_from_mongo(user_data)
+        # Get basic stats
+        project_count = await db.projects.count_documents({"user_id": user["id"]})
+        user["project_count"] = project_count
+        users_results.append(user)
+    
+    # Search events  
+    from datetime import date
+    today = date.today().isoformat()
+    events_cursor = db.events.find({
+        "event_date": {"$gte": today},
+        "$or": [
+            {"title": {"$regex": search_term, "$options": "i"}},
+            {"description": {"$regex": search_term, "$options": "i"}},
+            {"location": {"$regex": search_term, "$options": "i"}},
+            {"event_type": {"$regex": search_term, "$options": "i"}}
+        ]
+    })
+    events_list = await events_cursor.to_list(length=limit)
+    events_results = []
+    for event in events_list:
+        user = await db.users.find_one({"id": event["user_id"]})
+        if user:
+            event["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
+        event["participants_count"] = len(event.get("participants", []))
+        if current_user:
+            event["user_joined"] = current_user.id in event.get("participants", [])
+        else:
+            event["user_joined"] = False
+        events_results.append(parse_from_mongo(event))
+    
+    # Search projects
+    projects_cursor = db.projects.find({
+        "$or": [
+            {"title": {"$regex": search_term, "$options": "i"}},
+            {"description": {"$regex": search_term, "$options": "i"}},
+            {"car_make": {"$regex": search_term, "$options": "i"}},
+            {"car_model": {"$regex": search_term, "$options": "i"}},
+            {"modifications": {"$regex": search_term, "$options": "i"}}
+        ]
+    })
+    projects_list = await projects_cursor.to_list(length=limit)
+    projects_results = []
+    for project in projects_list:
+        user = await db.users.find_one({"id": project["user_id"]})
+        if user:
+            project["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
+        projects_results.append(parse_from_mongo(project))
+    
+    return {
+        "users": users_results,
+        "events": events_results,
+        "projects": projects_results,
+        "query": search_term
+    }
+
+@api_router.get("/search/users", response_model=List[Dict[str, Any]])
+async def search_users(q: str, limit: int = 20):
+    """Search users specifically"""
+    if not q or len(q.strip()) < 2:
+        return []
+    
+    search_term = q.strip()
+    users_cursor = db.users.find({
+        "$or": [
+            {"username": {"$regex": search_term, "$options": "i"}},
+            {"bio": {"$regex": search_term, "$options": "i"}}
+        ]
+    })
+    users_list = await users_cursor.to_list(length=limit)
+    
+    users_results = []
+    for user_data in users_list:
+        user = parse_from_mongo(user_data)
+        # Get stats
+        project_count = await db.projects.count_documents({"user_id": user["id"]})
+        event_count = await db.events.count_documents({"user_id": user["id"]})
+        user["stats"] = {
+            "project_count": project_count,
+            "event_count": event_count,
+            "follower_count": len(user.get("followers", []))
+        }
+        users_results.append(user)
+    
+    return users_results
+
+@api_router.get("/search/events", response_model=List[Dict[str, Any]])
+async def search_events(q: str, current_user: User = Depends(get_current_user), limit: int = 20):
+    """Search events specifically"""
+    if not q or len(q.strip()) < 2:
+        return []
+    
+    search_term = q.strip()
+    from datetime import date
+    today = date.today().isoformat()
+    
+    events_cursor = db.events.find({
+        "event_date": {"$gte": today},
+        "$or": [
+            {"title": {"$regex": search_term, "$options": "i"}},
+            {"description": {"$regex": search_term, "$options": "i"}},
+            {"location": {"$regex": search_term, "$options": "i"}},
+            {"event_type": {"$regex": search_term, "$options": "i"}}
+        ]
+    })
+    events_list = await events_cursor.to_list(length=limit)
+    
+    events_results = []
+    for event in events_list:
+        user = await db.users.find_one({"id": event["user_id"]})
+        if user:
+            event["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
+        event["participants_count"] = len(event.get("participants", []))
+        if current_user:
+            event["user_joined"] = current_user.id in event.get("participants", [])
+        else:
+            event["user_joined"] = False
+        events_results.append(parse_from_mongo(event))
+    
+    return events_results
+
 # Include the router in the main app
 app.include_router(api_router)
 
