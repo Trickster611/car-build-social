@@ -232,6 +232,84 @@ class AutoSocialAPITester:
             200
         )
 
+    # Events API Tests
+    def test_create_event(self, title, description, event_date, event_time, location, event_type, max_participants=None, images=None):
+        """Test creating an event"""
+        event_data = {
+            "title": title,
+            "description": description,
+            "event_date": event_date,
+            "event_time": event_time,
+            "location": location,
+            "event_type": event_type,
+            "max_participants": max_participants,
+            "images": images or []
+        }
+        
+        success, response = self.run_test(
+            f"Create Event ({title})",
+            "POST",
+            "events",
+            200,
+            data=event_data
+        )
+        
+        if success and 'id' in response:
+            if not self.created_event_id:
+                self.created_event_id = response['id']
+            return True, response
+        return False, {}
+
+    def test_get_events(self):
+        """Test getting all upcoming events"""
+        return self.run_test("Get All Events", "GET", "events", 200)
+
+    def test_get_event_by_id(self, event_id):
+        """Test getting a specific event"""
+        return self.run_test(
+            f"Get Event by ID",
+            "GET",
+            f"events/{event_id}",
+            200
+        )
+
+    def test_update_event(self, event_id, updates):
+        """Test updating an event"""
+        return self.run_test(
+            "Update Event",
+            "PUT",
+            f"events/{event_id}",
+            200,
+            data=updates
+        )
+
+    def test_join_event(self, event_id):
+        """Test joining an event"""
+        return self.run_test(
+            "Join Event",
+            "POST",
+            f"events/{event_id}/join",
+            200
+        )
+
+    def test_leave_event(self, event_id):
+        """Test leaving an event"""
+        return self.run_test(
+            "Leave Event",
+            "DELETE",
+            f"events/{event_id}/join",
+            200
+        )
+
+    def test_get_user_events(self, user_id):
+        """Test getting user's events"""
+        return self.run_test(
+            "Get User Events",
+            "GET",
+            f"users/{user_id}/events",
+            200
+        )
+
     def switch_to_second_user(self):
         """Switch authentication to second user"""
         if self.second_user_token:
