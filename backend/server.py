@@ -434,6 +434,143 @@ async def toggle_like(like_data: LikeToggle, current_user: User = Depends(get_cu
         )
         return {"liked": True, "message": "Project liked"}
 
+# Event routes
+@api_router.get("/events", response_model=List[Dict[str, Any]])
+async def get_events(current_user: User = Depends(get_current_user)):
+    # Get all upcoming events (not past events)
+    from datetime import date
+    today = date.today().isoformat()
+    
+    events_cursor = db.events.find({"event_date": {"$gte": today}}).sort("event_date", 1)
+    events_list = await events_cursor.to_list(length=100)
+    
+    # Enrich with user data and participant info
+    cleaned_events = []
+    for event in events_list:
+        user = await db.users.find_one({"id": event["user_id"]})
+        if user:
+            event["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
+        
+        # Add participant count and check if current user joined
+        event["participants_count"] = len(event.get("participants", []))
+        if current_user:
+            event["user_joined"] = current_user.id in event.get("participants", [])
+        else:
+            event["user_joined"] = False
+            
+        cleaned_event = parse_from_mongo(event)
+        cleaned_events.append(cleaned_event)
+    
+    return cleaned_events
+
+@api_router.get("/events/{event_id}", response_model=Dict[str, Any])
+async def get_event(event_id: str, current_user: User = Depends(get_current_user)):
+    event = await db.events.find_one({"id": event_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Get user data
+    user = await db.users.find_one({"id": event["user_id"]})
+    if user:
+        event["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
+    
+    # Add participant info
+    event["participants_count"] = len(event.get("participants", []))
+    if current_user:
+        event["user_joined"] = current_user.id in event.get("participants", [])
+    else:
+        event["user_joined"] = False
+    
+    # Get participant details
+    participants_info = []
+    for participant_id in event.get("participants", []):
+        participant = await db.users.find_one({"id": participant_id})
+        if participant:
+            participants_info.append({
+                "id": participant["id"],
+                "username": participant["username"],
+                "profile_image": participant.get("profile_image", "")
+            })
+    event["participants_info"] = participants_info
+    
+    return parse_from_mongo(event)
+
+@api_router.post("/events", response_model=Event)
+async def create_event(event_data: EventCreate, current_user: User = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    event = Event(**event_data.dict(), user_id=current_user.id)
+    event_dict = prepare_for_mongo(event.dict())
+    await db.events.insert_one(event_dict)
+    
+    return event
+
+@api_router.put("/events/{event_id}", response_model=Event)
+async def update_event(event_id: str, event_update: EventUpdate, current_user: User = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    event = await db.events.find_one({"id": event_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    if event["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this event")
+    
+    update_data = {k: v for k, v in event_update.dict().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.events.update_one({"id": event_id}, {"$set": update_data})
+    
+    updated_event = await db.events.find_one({"id": event_id})
+    return Event(**updated_event)
+
+@api_router.post("/events/{event_id}/join")
+async def join_event(event_id: str, current_user: User = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Check if event exists
+    event = await db.events.find_one({"id": event_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Check if user is already joined
+    if current_user.id in event.get("participants", []):
+        raise HTTPException(status_code=400, detail="Already joined this event")
+    
+    # Check if event is full
+    max_participants = event.get("max_participants")
+    if max_participants and len(event.get("participants", [])) >= max_participants:
+        raise HTTPException(status_code=400, detail="Event is full")
+    
+    # Add user to participants
+    await db.events.update_one(
+        {"id": event_id},
+        {"$addToSet": {"participants": current_user.id}}
+    )
+    
+    return {"message": "Successfully joined event"}
+
+@api_router.delete("/events/{event_id}/join")
+async def leave_event(event_id: str, current_user: User = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Remove user from participants
+    await db.events.update_one(
+        {"id": event_id},
+        {"$pull": {"participants": current_user.id}}
+    )
+    
+    return {"message": "Successfully left event"}
+
+@api_router.get("/users/{user_id}/events", response_model=List[Event])
+async def get_user_events(user_id: str):
+    events = await db.events.find({"user_id": user_id}).sort("event_date", 1).to_list(length=100)
+    return [Event(**event) for event in events]
+
 # Include the router in the main app
 app.include_router(api_router)
 
