@@ -117,6 +117,27 @@ const Header = () => {
           
           {user && (
             <div className="flex items-center space-x-4">
+              <nav className="flex space-x-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => window.location.href = "/"}
+                  className="text-gray-600 hover:text-amber-600"
+                >
+                  <Car className="h-4 w-4 mr-2" />
+                  Projects
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => window.location.href = "/events"}
+                  className="text-gray-600 hover:text-amber-600"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Events
+                </Button>
+              </nav>
+              <Separator orientation="vertical" className="h-6" />
               <Button variant="ghost" size="sm">
                 <Users className="h-4 w-4 mr-2" />
                 Following: {user.followed_users?.length || 0}
