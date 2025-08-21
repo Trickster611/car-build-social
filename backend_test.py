@@ -15,6 +15,7 @@ class AutoSocialAPITester:
         self.created_project_id = None
         self.second_user_token = None
         self.second_user_id = None
+        self.created_event_id = None
 
     def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
         """Run a single API test"""
