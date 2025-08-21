@@ -136,6 +136,44 @@ class Like(BaseModel):
 class LikeToggle(BaseModel):
     project_id: str
 
+class Event(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    title: str
+    description: str
+    event_date: str  # YYYY-MM-DD format
+    event_time: str  # HH:MM format
+    location: str
+    event_type: str  # "car_meet", "car_show", "race", "workshop", "cruise", "track_day"
+    max_participants: Optional[int] = None
+    participants: List[str] = Field(default_factory=list)  # List of user IDs
+    images: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class EventCreate(BaseModel):
+    title: str
+    description: str
+    event_date: str
+    event_time: str
+    location: str
+    event_type: str
+    max_participants: Optional[int] = None
+    images: List[str] = Field(default_factory=list)
+
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    event_date: Optional[str] = None
+    event_time: Optional[str] = None
+    location: Optional[str] = None
+    event_type: Optional[str] = None
+    max_participants: Optional[int] = None
+    images: Optional[List[str]] = None
+
+class EventJoin(BaseModel):
+    event_id: str
+
 # Authentication helper
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not credentials:
