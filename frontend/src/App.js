@@ -105,6 +105,7 @@ const useAuth = () => {
 // Components
 const Header = () => {
   const { user, logout } = useAuth();
+  const location = useLocation();
 
   return (
     <header className="border-b border-amber-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-50">
@@ -118,24 +119,32 @@ const Header = () => {
           {user && (
             <div className="flex items-center space-x-4">
               <nav className="flex space-x-1">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => window.location.href = "/"}
-                  className="text-gray-600 hover:text-amber-600"
-                >
-                  <Car className="h-4 w-4 mr-2" />
-                  Projects
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => window.location.href = "/events"}
-                  className="text-gray-600 hover:text-amber-600"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Events
-                </Button>
+                <Link to="/">
+                  <Button 
+                    variant={location.pathname === "/" ? "default" : "ghost"}
+                    size="sm" 
+                    className={location.pathname === "/" 
+                      ? "bg-amber-600 hover:bg-amber-700 text-white" 
+                      : "text-gray-600 hover:text-amber-600"
+                    }
+                  >
+                    <Car className="h-4 w-4 mr-2" />
+                    Projects
+                  </Button>
+                </Link>
+                <Link to="/events">
+                  <Button 
+                    variant={location.pathname === "/events" ? "default" : "ghost"}
+                    size="sm" 
+                    className={location.pathname === "/events" 
+                      ? "bg-amber-600 hover:bg-amber-700 text-white" 
+                      : "text-gray-600 hover:text-amber-600"
+                    }
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Events
+                  </Button>
+                </Link>
               </nav>
               <Separator orientation="vertical" className="h-6" />
               <Button variant="ghost" size="sm">
