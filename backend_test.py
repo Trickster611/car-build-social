@@ -403,6 +403,78 @@ def main():
         # Test 17: Like project again (should unlike)
         tester.test_like_project(tester.created_project_id)
     
+    # Events API Testing
+    print("\n🎪 TESTING EVENTS API")
+    print("=" * 30)
+    
+    # Test 18: Create an event (switch back to first user)
+    if tester.second_user_token:
+        # Switch back to first user to create event
+        original_token = tester.token
+        tester.token = None
+        tester.test_login_user(user1_username)
+    
+    from datetime import date, timedelta
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    
+    success, _ = tester.test_create_event(
+        "Saturday Night Car Meet",
+        "Join us for an awesome car meet at the downtown parking lot. Bring your rides!",
+        tomorrow,
+        "19:00",
+        "Downtown Parking Lot, Main Street",
+        "car_meet",
+        50,
+        ["https://example.com/carmeet1.jpg"]
+    )
+    
+    if not success or not tester.created_event_id:
+        print("❌ Event creation failed, skipping event tests")
+    else:
+        # Test 19: Get all events
+        tester.test_get_events()
+        
+        # Test 20: Get specific event
+        tester.test_get_event_by_id(tester.created_event_id)
+        
+        # Test 21: Update event
+        tester.test_update_event(tester.created_event_id, {
+            "description": "Updated: Join us for an EPIC car meet at the downtown parking lot!",
+            "max_participants": 75
+        })
+        
+        # Test 22: Get user events
+        tester.test_get_user_events(tester.user_id)
+        
+        # Test 23: Switch to second user and join event
+        if tester.second_user_token:
+            tester.switch_to_second_user()
+            
+            # Test 24: Join event
+            tester.test_join_event(tester.created_event_id)
+            
+            # Test 25: Get event details (should show user joined)
+            tester.test_get_event_by_id(tester.created_event_id)
+            
+            # Test 26: Leave event
+            tester.test_leave_event(tester.created_event_id)
+            
+            # Test 27: Join event again
+            tester.test_join_event(tester.created_event_id)
+            
+            # Test 28: Create second event with different type
+            next_week = (date.today() + timedelta(days=7)).isoformat()
+            tester.test_create_event(
+                "Track Day Event",
+                "Professional track day at the local speedway. All skill levels welcome!",
+                next_week,
+                "09:00",
+                "Local Speedway, Track Road",
+                "track_day",
+                20,
+                ["https://example.com/trackday1.jpg"]
+            )
+    
     # Print final results
     print("\n" + "=" * 50)
     print(f"📊 FINAL RESULTS")
