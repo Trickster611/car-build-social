@@ -44,13 +44,19 @@ def prepare_for_mongo(data):
     return data
 
 def parse_from_mongo(item):
-    """Parse ISO strings back to datetime objects"""
-    if isinstance(item, dict) and item.get('created_at'):
-        if isinstance(item['created_at'], str):
-            try:
-                item['created_at'] = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
-            except:
-                pass
+    """Parse ISO strings back to datetime objects and remove MongoDB _id"""
+    if isinstance(item, dict):
+        # Remove MongoDB _id field if present
+        if '_id' in item:
+            del item['_id']
+        
+        # Parse datetime fields
+        if item.get('created_at'):
+            if isinstance(item['created_at'], str):
+                try:
+                    item['created_at'] = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
+                except:
+                    pass
     return item
 
 # Models
