@@ -417,7 +417,187 @@ const ProjectCard = ({ project, onLike, onComment }) => {
   );
 };
 
-const CreateProjectModal = ({ onProjectCreated }) => {
+const CreateEventModal = ({ onEventCreated }) => {
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    event_date: '',
+    event_time: '',
+    location: '',
+    event_type: 'car_meet',
+    max_participants: '',
+    images: ''
+  });
+  const [loading, setLoading] = useState(false);
+
+  const eventTypes = [
+    { value: 'car_meet', label: 'Car Meet' },
+    { value: 'car_show', label: 'Car Show' },
+    { value: 'race', label: 'Race Event' },
+    { value: 'workshop', label: 'Workshop' },
+    { value: 'cruise', label: 'Cruise' },
+    { value: 'track_day', label: 'Track Day' }
+  ];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const eventData = {
+        ...formData,
+        max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
+        images: formData.images.split(',').map(img => img.trim()).filter(img => img)
+      };
+
+      const response = await axios.post(`${API}/events`, eventData);
+      onEventCreated(response.data);
+      setOpen(false);
+      setFormData({
+        title: '',
+        description: '',
+        event_date: '',
+        event_time: '',
+        location: '',
+        event_type: 'car_meet',
+        max_participants: '',
+        images: ''
+      });
+    } catch (error) {
+      console.error('Failed to create event:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="bg-amber-600 hover:bg-amber-700">
+          <Plus className="h-4 w-4 mr-2" />
+          New Event
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Car Event</DialogTitle>
+          <DialogDescription>
+            Organize a car event for the community
+          </DialogDescription>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="title">Event Title</Label>
+            <Input
+              id="title"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              required
+              placeholder="Saturday Night Car Meet"
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              required
+              placeholder="Join us for an awesome car meet..."
+              rows={3}
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="event_date">Date</Label>
+              <Input
+                id="event_date"
+                type="date"
+                value={formData.event_date}
+                onChange={(e) => setFormData({...formData, event_date: e.target.value})}
+                required
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="event_time">Time</Label>
+              <Input
+                id="event_time"
+                type="time"
+                value={formData.event_time}
+                onChange={(e) => setFormData({...formData, event_time: e.target.value})}
+                required
+              />
+            </div>
+          </div>
+          
+          <div>
+            <Label htmlFor="location">Location</Label>
+            <Input
+              id="location"
+              value={formData.location}
+              onChange={(e) => setFormData({...formData, location: e.target.value})}
+              required
+              placeholder="Downtown Parking Lot, Main St"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="event_type">Event Type</Label>
+              <select
+                id="event_type"
+                value={formData.event_type}
+                onChange={(e) => setFormData({...formData, event_type: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                {eventTypes.map(type => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="max_participants">Max Participants (Optional)</Label>
+              <Input
+                id="max_participants"
+                type="number"
+                value={formData.max_participants}
+                onChange={(e) => setFormData({...formData, max_participants: e.target.value})}
+                placeholder="50"
+                min="1"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <Label htmlFor="images">Image URLs (comma-separated)</Label>
+            <Input
+              id="images"
+              value={formData.images}
+              onChange={(e) => setFormData({...formData, images: e.target.value})}
+              placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
+            />
+          </div>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading} className="bg-amber-600 hover:bg-amber-700">
+              {loading ? 'Creating...' : 'Create Event'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
