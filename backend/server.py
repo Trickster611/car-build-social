@@ -267,14 +267,16 @@ async def get_projects(current_user: User = Depends(get_current_user)):
     
     projects_list = await projects_cursor.to_list(length=50)
     
-    # Enrich with user data
+    # Enrich with user data and clean MongoDB fields
+    cleaned_projects = []
     for project in projects_list:
         user = await db.users.find_one({"id": project["user_id"]})
         if user:
             project["user"] = {"id": user["id"], "username": user["username"], "profile_image": user.get("profile_image", "")}
-        project = parse_from_mongo(project)
+        cleaned_project = parse_from_mongo(project)
+        cleaned_projects.append(cleaned_project)
     
-    return projects_list
+    return cleaned_projects
 
 @api_router.get("/projects/{project_id}", response_model=Dict[str, Any])
 async def get_project(project_id: str):
